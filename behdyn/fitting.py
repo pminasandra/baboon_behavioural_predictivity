@@ -19,10 +19,10 @@ import pandas as pd
 import powerlaw as pl
 from scipy.interpolate import interp1d
 
-from pkgnametbd import config
-from pkgnametbd import classifier_info
-from pkgnametbd import boutparsing
-from pkgnametbd import utilities
+import config
+import classifier_info
+import boutparsing
+import utilities
 import replicates
 
 if not config.SUPPRESS_INFORMATIVE_PRINT:

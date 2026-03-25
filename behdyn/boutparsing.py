@@ -14,9 +14,9 @@ import random
 
 import pandas as pd
 
-from pkgnametbd import classifier_info
-from pkgnametbd import config
-from pkgnametbd import utilities
+import classifier_info
+import config
+import utilities
 
 if not config.SUPPRESS_INFORMATIVE_PRINT:
     print = utilities.sprint
@@ -40,6 +40,7 @@ def as_bouts(dataframe, species, randomize=False):
     state_duration = 0.0
     row_num = 0
 
+    bout_inits = []
     bout_states = []
     bout_durations = []
 
@@ -48,10 +49,13 @@ def as_bouts(dataframe, species, randomize=False):
         # Can only happen in first iteration
             row_num += 1
             previous_state = states[0]
+            t_state_init = datetimes[0]
             current_state = state
             continue
         current_state = state
-        if datetime - datetimes[row_num - 1] != dt.timedelta(seconds=epoch):
+        factordiff = abs((datetime - datetimes[row_num - 1]).total_seconds() - epoch)/epoch
+
+        if (0.8 <= factordiff) and (factordiff <= 1.3):
         # If there's a gap in the sequence
             previous_recorded_state = "UNKNOWN"
             previous_state = "UNKNOWN"
@@ -65,6 +69,8 @@ def as_bouts(dataframe, species, randomize=False):
             if previous_recorded_state != "UNKNOWN" and previous_state != "UNKNOWN":
                 # If the state just now was unknown (timeskip) or
                 # if the previous state was not known
+                bout_inits.append(t_state_init)
+                t_state_init = datetime
                 bout_states.append(previous_state)
                 bout_durations.append(state_duration)
             previous_recorded_state = previous_state
@@ -73,8 +79,8 @@ def as_bouts(dataframe, species, randomize=False):
         previous_state = state
         row_num += 1
 
-    boutdf = pd.DataFrame([bout_durations, bout_states]).T
-    boutdf.columns = ["duration", "state"]
+    boutdf = pd.DataFrame([bout_inits, bout_durations, bout_states]).T
+    boutdf.columns = ["datetime", "duration", "state"]
     boutdf = boutdf.infer_objects()
     return boutdf
 
@@ -117,14 +123,48 @@ def default_datagen_creator(species):
 
     return data_generator
 
-meerkat_data_generator = default_datagen_creator("meerkat")
-coati_data_generator = default_datagen_creator("coati")
-hyena_data_generator = default_datagen_creator("hyena")
+
+def baboon_data_generator(randomize=False, extract_bouts=True):
+    f"""
+    *GENERATOR* yields behavioural sequence data and metadata from baboons,
+    individual-by-individual.
+    Args:
+        randomize (bool): whether to randomize data before extracting bouts.
+    Yields:
+        dict, where
+            dict["data"]: pd.DataFrame
+            dict["id"]: str, identifying information for the individual
+            dict["species"]: str, species of the individual whose data is in
+                            dict["data"]
+    """
+    species = 'baboon'
+    if not extract_bouts:
+        def postproc(*args, **kwargs):
+            return args[0]
+    else:
+        postproc = as_bouts
+
+    j = 1
+    for ind in glob.glob(os.path.join(config.BABOON_BEH_SEQ_DIR, "*.parquet")):
+        if j >= 10:
+            return
+        name = os.path.basename(ind)[:-len(".parquet")]
+        read = pd.read_parquet(ind)
+        read.loc[:, 'state'] = "Active"
+        read.loc[read.pot_sleep == 1.0, 'state'] = "Inactive"
+        read = read[['timestamp', 'state']]
+        read.columns = ['datetime', 'state']
+        read["datetime"] = pd.to_datetime(read["datetime"], format="mixed")
+        yield {
+               "data": postproc(read, species, randomize=randomize),
+               "id": name,
+               "species": species
+              }
+        j += 1
+
 
 generators = {
-                "meerkat": meerkat_data_generator,
-                "coati": coati_data_generator,
-                "hyena": hyena_data_generator
+                "baboon": baboon_data_generator
             }
 
 def bouts_data_generator(randomize=False, extract_bouts=True):
@@ -145,3 +185,11 @@ def bouts_data_generator(randomize=False, extract_bouts=True):
         for databundle in datasource:
                 yield databundle
 
+if __name__ == "__main__":
+    bdg = bouts_data_generator()
+    i = 0
+    for x in bdg:
+        if i >= 10:
+            break
+        print(x)
+        i+= 1

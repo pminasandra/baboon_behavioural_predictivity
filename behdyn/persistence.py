@@ -24,12 +24,12 @@ from sklearn.metrics import adjusted_mutual_info_score, r2_score
 import scipy.optimize
 from scipy.stats import linregress
 
-from pkgnametbd import boutparsing
-from pkgnametbd import config
-from pkgnametbd import classifier_info
-from pkgnametbd import fitting
+import boutparsing
+import config
+import classifier_info
+import fitting
 import replicates
-from pkgnametbd import utilities
+import utilities
 
 if not config.SUPPRESS_INFORMATIVE_PRINT:
     print = utilities.sprint

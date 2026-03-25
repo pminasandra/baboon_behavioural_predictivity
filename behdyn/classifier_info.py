@@ -5,7 +5,5 @@ class ClassifierInfo:
         self.epoch = epoch
 
 classifiers_info = {
-    "hyena": ClassifierInfo("hyena", 3.0),
-    "meerkat": ClassifierInfo("meerkat", 1.0),
-    "coati": ClassifierInfo("coati", 1.0)
+    "baboon": ClassifierInfo("baboon", 60.0),
 }
