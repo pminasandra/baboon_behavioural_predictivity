@@ -124,7 +124,8 @@ def default_datagen_creator(species):
     return data_generator
 
 
-def baboon_data_generator(randomize=False, extract_bouts=True):
+def baboon_data_generator(randomize=False, extract_bouts=True,
+                            only_night=config.ONLY_NIGHT):
     f"""
     *GENERATOR* yields behavioural sequence data and metadata from baboons,
     individual-by-individual.
@@ -144,10 +145,7 @@ def baboon_data_generator(randomize=False, extract_bouts=True):
     else:
         postproc = as_bouts
 
-    j = 1
     for ind in glob.glob(os.path.join(config.BABOON_BEH_SEQ_DIR, "*.parquet")):
-        if j >= 10:
-            return
         name = os.path.basename(ind)[:-len(".parquet")]
         read = pd.read_parquet(ind)
         read.loc[:, 'state'] = "Active"
@@ -155,19 +153,29 @@ def baboon_data_generator(randomize=False, extract_bouts=True):
         read = read[['timestamp', 'state']]
         read.columns = ['datetime', 'state']
         read["datetime"] = pd.to_datetime(read["datetime"], format="mixed")
+        if only_night:
+            mask1 = read['datetime'].dt.time.between(config.KENYA_NIGHT_BEGIN,
+                                pd.to_datetime("23:59:59.999").time())
+            mask2 = read['datetime'].dt.time.between(pd.to_datetime("00:00").time(),
+                                config.KENYA_NIGHT_END)
+            mask = mask1 | mask2
+            read = read[mask]
+
+        if read.shape[0] <= config.MIN_DATA_POINTS:
+            continue
+
         yield {
                "data": postproc(read, species, randomize=randomize),
                "id": name,
                "species": species
               }
-        j += 1
 
 
 generators = {
                 "baboon": baboon_data_generator
             }
 
-def bouts_data_generator(randomize=False, extract_bouts=True):
+def bouts_data_generator(randomize=False, extract_bouts=True, **kwargs):
     """
     *GENERATOR* yields behavioural sequence data and metadata for all species,
     individual-by-individual,
@@ -181,7 +189,8 @@ def bouts_data_generator(randomize=False, extract_bouts=True):
                             data is in dict["data"]
     """
     for species in config.species:
-        datasource = generators[species](randomize=randomize, extract_bouts=extract_bouts)
+        datasource = generators[species](randomize=randomize,
+                            extract_bouts=extract_bouts, **kwargs)
         for databundle in datasource:
                 yield databundle
 
