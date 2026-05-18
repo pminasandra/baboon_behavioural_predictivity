@@ -40,6 +40,7 @@ KENYA_NIGHT_END = pd.to_datetime("03:00").time()
 
 # General
 MIN_DATA_POINTS = 60 * 24 * 20#at least 20 days
+TOLERABLE_TIMESTAMP_OFFSET = 29#seconds either way
 
 # Distribution fitting
 def all_distributions(fit):

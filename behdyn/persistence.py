@@ -72,7 +72,6 @@ def baboon_monthwise_data_generator():
             newdatabundle["month"] = month
 
             yield newdatabundle
-        break #FIXME
 
 
 def generate_time_series(dataframe, species, state):
@@ -216,7 +215,8 @@ def _validated_paired_indices(dt_col, tdiff, indices_start, indices_end, epoch):
 # Fuck Pandas so much.
 # (Still a great tool though).
 # it sucks to work so much against numpy and pandas in a straightforward implementation of something
-    mask =  np.isclose(all_tdiffs, int(tdiff*epoch)) #mask
+    tds = np.absolute(all_tdiffs - tdiff*epoch)
+    mask = tds < config.TOLERABLE_TIMESTAMP_OFFSET
     return mask
 
 
@@ -456,7 +456,7 @@ def complete_MI_analysis(bdg=None,
     param_results = []
     raw_mi_vals = {"id": [], "month": [], "mi_vals": []}
 
-    saved_res = ["species", "id", "mi_vals", "mi_errs" "mean_mi_markov",
+    saved_res = ["species", "id", "month", "mi_vals", "mi_errs" "mean_mi_markov",
                     "ulim_mi_markov", "llim_mi_markov", "tls_markov"]
     saved_res = pd.DataFrame(columns=saved_res)
 
@@ -483,6 +483,7 @@ def complete_MI_analysis(bdg=None,
                                 )
         table_row["mi_vals"] = [mi_vals]
         table_row["mi_errs"] = [mi_errs]
+        table_row["month"] = [month]
 
         raw_mi_vals["id"].append(id_)
         raw_mi_vals["month"].append(month)
