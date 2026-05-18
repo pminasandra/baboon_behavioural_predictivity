@@ -214,7 +214,7 @@ def generate_behavioural_inertia_plots(hazard_rate=False, add_bootstrapping=True
 {config.NUM_BOOTSTRAP_REPS} times.")
     if add_markov:
         print(f"For each species-state, we will redo analysis \
-with {config.NUM_MARKOVISED_SEQUENCES} Markovised seqeunces.")
+with {config.NUM_MARKOVISED_SEQUENCES} Markovised sequences.")
     bdg = boutparsing.bouts_data_generator(extract_bouts=False)
 
     plots = {}

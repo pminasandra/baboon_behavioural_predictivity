@@ -18,7 +18,6 @@ import multiprocessing as mp
 import os.path
 
 import matplotlib.pyplot as plt
-import nolds
 import numpy as np
 import pandas as pd
 from sklearn.metrics import adjusted_mutual_info_score, r2_score
@@ -65,6 +64,7 @@ def baboon_monthwise_data_generator():
 
         for month, monthlydata in monthlydatasets:
             monthlydata = monthlydata.copy().reset_index()
+            monthlydata = monthlydata.dropna()
             newdatabundle = {}
             newdatabundle["data"] = monthlydata
             newdatabundle["id"] = id_
@@ -481,6 +481,8 @@ def complete_MI_analysis(bdg=None,
                                 timelags,
                                 bialek_correction=bialek_correction
                                 )
+        if np.any(np.isnan(mi_vals)):
+            continue
         table_row["mi_vals"] = [mi_vals]
         table_row["mi_errs"] = [mi_errs]
         table_row["month"] = [month]
