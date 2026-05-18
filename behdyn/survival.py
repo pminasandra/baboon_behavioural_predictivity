@@ -14,12 +14,12 @@ import multiprocessing as mp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pkgnametbd import boutparsing
-from pkgnametbd import config
-from pkgnametbd import classifier_info
-from pkgnametbd import fitting
-from pkgnametbd import replicates
-from pkgnametbd import utilities
+import boutparsing
+import config
+import classifier_info
+import fitting
+import replicates
+import utilities
 
 if not config.SUPPRESS_INFORMATIVE_PRINT:
     print = utilities.sprint
