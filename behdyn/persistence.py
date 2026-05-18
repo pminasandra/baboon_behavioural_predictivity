@@ -1,6 +1,7 @@
 # Pranav Minasandra
 # pminasandra.github.io
 # Sep 27, 2023
+# Updated 18 May 2026 for baboons
 
 """
 Implements Detrended Fluctuation Analysis and Predictive Information for
@@ -33,6 +34,46 @@ import utilities
 
 if not config.SUPPRESS_INFORMATIVE_PRINT:
     print = utilities.sprint
+
+def iter_monthly_chunks(df, datetime_col="datetime", min_num_days=20):
+    """
+    Yield one dataframe chunk per month.
+
+    A month is yielded only if it contains at least `min_num_days`
+    distinct calendar days.
+    """
+    df = df.copy()
+    df[datetime_col] = pd.to_datetime(df[datetime_col])
+
+    # Optional but usually useful
+    df = df.sort_values(datetime_col)
+
+    for month, chunk in df.groupby(df[datetime_col].dt.to_period("M")):
+        n_days = chunk[datetime_col].dt.date.nunique()
+
+        if n_days >= min_num_days:
+            yield month, chunk
+
+def baboon_monthwise_data_generator():
+    bdg = boutparsing.baboon_data_generator(extract_bouts=False,
+                                            only_night=False)
+    for databundle in bdg:
+        data = databundle["data"]
+        id_ = databundle["id"]
+        species = databundle["species"]
+        monthlydatasets = iter_monthly_chunks(data)
+
+        for month, monthlydata in monthlydatasets:
+            monthlydata = monthlydata.copy().reset_index()
+            newdatabundle = {}
+            newdatabundle["data"] = monthlydata
+            newdatabundle["id"] = id_
+            newdatabundle["species"] = species
+            newdatabundle["month"] = month
+
+            yield newdatabundle
+        break #FIXME
+
 
 def generate_time_series(dataframe, species, state):
     """
@@ -151,6 +192,7 @@ def _time_slots_for_sampling(Tmin, Tmax, num):
 
 def _mutual_information(vals1, vals2):
     mi = adjusted_mutual_info_score(vals1, vals2)
+    mi = max(mi, 0.0)
     return mi
 
 
@@ -163,19 +205,18 @@ def _paired_past_future_indices(array, tdiff):
 
 
 def _validated_paired_indices(dt_col, tdiff, indices_start, indices_end, epoch):
-    s_ends = dt_col[indices_end]
-    s_starts = dt_col[indices_start]
+    s_ends = dt_col.iloc[indices_end].astype(int)
+    s_starts = dt_col.iloc[indices_start].astype(int)
 
-    s_ends = s_ends.to_numpy()
-    s_starts = s_starts.to_numpy()
 
-    all_tdiffs = s_ends - s_starts
-    all_tdiffs *= 1e-9#because numpy measures time in ns for some reason
+    all_tdiffs = np.array(s_ends) - np.array(s_starts)
     all_tdiffs = all_tdiffs.astype(float)
+    all_tdiffs /= 1e6#because numpy measures time in ns for some reason
+# After pandas 3.0, it is now us instead of ns.
+# Fuck Pandas so much.
+# (Still a great tool though).
 # it sucks to work so much against numpy and pandas in a straightforward implementation of something
- 
-
-    mask =  np.isclose(all_tdiffs, tdiff*epoch) #mask
+    mask =  np.isclose(all_tdiffs, int(tdiff*epoch)) #mask
     return mask
 
 
@@ -250,7 +291,7 @@ def bialek_corrected_mi(x, y):
     return extrap_mi, extrap_mi_err
 
 
-def MI_t(array, dt_col, T, epoch):
+def MI_t(array, dt_col, T, epoch, bialek_correction=True):
     """
     For a given time-series, quantifies the predictability of the animal's state
     at time t+T given we know the state at time t.
@@ -263,26 +304,29 @@ def MI_t(array, dt_col, T, epoch):
         Mutual information at T delay
     """
 
+
     t_starts, t_ends = _paired_past_future_indices(array, T)
     dt_mask = _validated_paired_indices(dt_col, T, t_starts, t_ends, epoch)
 
-
     t_starts = t_starts[dt_mask]
     t_ends = t_ends[dt_mask]
-
 
     array_starts = array[t_starts]
     array_ends = array[t_ends]
 
     if len(array_starts) < 1000:
         return np.nan, np.nan
-    mi, error = bialek_corrected_mi(array_starts, array_ends)
-    mi = max(mi, 0.0)
-    print("Computations finished for delay", T)
-    return mi, error
+    if bialek_correction:
+        mi, error = bialek_corrected_mi(array_starts, array_ends)
+        mi = max(mi, 0.0)
+        print("Computations finished for delay", T)
+        return mi, error
+    else:
+        mi = _mutual_information(array_starts, array_ends)
+        return mi, np.nan
 
 
-def mutual_information_decay(df, species, timelags):
+def mutual_information_decay(df, species, timelags, bialek_correction=True):
     """
     Implements the above analyses for a range of time-lags for an individual.
     Args:
@@ -294,12 +338,21 @@ def mutual_information_decay(df, species, timelags):
     dt_col = df["datetime"]
     sequence = df["state"]
 
+
     epoch = classifier_info.classifiers_info[species].epoch
 
     mi_vals = []
 
     for tau in timelags:
-        mi_vals.append(MI_t(sequence, dt_col, tau, epoch))
+        mi, mi_err = MI_t(sequence,
+                    dt_col,
+                    tau,
+                    epoch,
+                    bialek_correction=bialek_correction
+                    )
+        mi_vals.append(
+                (mi, mi_err)
+            )
 
     mis = [mi_val for mi_val, mi_err in mi_vals]
     mi_errs = [mi_err for mi_val, mi_err in mi_vals]
@@ -375,24 +428,33 @@ def _save_best_dist_params(funcs, params, r2vals):
                     "power_exponent": best_params[1],
                     "exponential_decay": best_params[2]}
 
-def complete_MI_analysis(add_markov=True):
+def complete_MI_analysis(bdg=None,
+                            add_markov=True,
+                            bdg_kw=dict(),
+                            bialek_correction=True,
+                            timelags = _time_slots_for_sampling(1, 5000, 50)):
     """
     Runs all analyses for MI decay.
+    Args:
+        bdg (iterable): yields databundles (see boutparsing.py)
+        add_markov (bool, def True): whether to also use Markovisation data. 
+        bdg_kw (dict): additional keywords for the bout data generator
+        bialek_correction (bool): whether to make Nemenman-Bialek correction for given
+        MI estimates.
     """
 
 # Load data and inititalise
     print("Mutual Information decay analysis initiated.")
 
-    bdg = boutparsing.bouts_data_generator(extract_bouts=False)
-    timelags = _time_slots_for_sampling(1, 5000, 50)
+    if bdg is None:
+        bdg = boutparsing.bouts_data_generator(extract_bouts=False, **bdg_kw)
     timelags = np.unique(timelags)
-    # the first value is duplicated b/c log-scaling + rounding, therefore
-    # unique()
 
     print("complete_MI_analysis: will work on the following lags: ", *timelags)
     plots = {}
     r2_results = []
     param_results = []
+    raw_mi_vals = {"id": [], "month": [], "mi_vals": []}
 
     saved_res = ["species", "id", "mi_vals", "mi_errs" "mean_mi_markov",
                     "ulim_mi_markov", "llim_mi_markov", "tls_markov"]
@@ -402,6 +464,7 @@ def complete_MI_analysis(add_markov=True):
         species_ = databundle["species"]
         id_ = databundle["id"]
         data = databundle["data"]
+        month = databundle["month"]
         table_row = {"species": species_, "id": id_}
 
 # Make empty plots
@@ -410,19 +473,27 @@ def complete_MI_analysis(add_markov=True):
         fig, ax = plots[species_]
         data["datetime"] = pd.to_datetime(data["datetime"])
 
-        print(f"MI decay analysis working on {species_} {id_}.")
+        print(f"MI decay analysis working on {species_} {id_} for {month}.")
 
 # Compute time-lagged MI values
-        mi_vals, mi_errs = mutual_information_decay(data, species_, timelags)
+        mi_vals, mi_errs = mutual_information_decay(data,
+                                species_,
+                                timelags,
+                                bialek_correction=bialek_correction
+                                )
         table_row["mi_vals"] = [mi_vals]
         table_row["mi_errs"] = [mi_errs]
 
+        raw_mi_vals["id"].append(id_)
+        raw_mi_vals["month"].append(month)
+        raw_mi_vals["mi_vals"].append(mi_vals)
+
 # Make plots of actual MI decay
         ax.plot(timelags, mi_vals, color="black", linewidth=0.4)
-        ax.fill_between(timelags, mi_vals + 2.58*mi_errs,
-                            mi_vals - 2.58*mi_errs,
-                            color="black",
-                            alpha=0.09)
+#        ax.fill_between(timelags, mi_vals + 2.58*mi_errs,
+#                            mi_vals - 2.58*mi_errs,
+#                            color="black",
+#                            alpha=0.09)
         ax.set_xscale("log")
         ax.set_yscale("log")
 
@@ -517,6 +588,8 @@ def complete_MI_analysis(add_markov=True):
                 )
         ax.autoscale(enable=True)
 
+    raw_mi_vals = pd.DataFrame(raw_mi_vals)
+    raw_mi_vals.to_parquet(os.path.join(config.DATA, "raw_MI_vals.parquet"))
     pd.DataFrame(r2_results).to_csv(os.path.join(config.DATA,
                                                     "MI_decay_R2s.csv"
                                                 ),
@@ -610,7 +683,10 @@ def replot(pklfile):
 
 
 if __name__ == "__main__":
-    complete_MI_analysis(add_markov=config.ADD_MARKOV)
+    timelags = _time_slots_for_sampling(1, 180, 50)
+    bdg = baboon_monthwise_data_generator()
+    complete_MI_analysis(bdg=bdg,
+                            add_markov=False,
+                            bialek_correction=False,
+                            timelags=timelags)
     #replot("/home/pranav/Personal/Projects/Bout_Duration_Distributions/Data/MI_analyses_all_raw.pkl")
-    results = compute_all_alpha_dfa()
-    save_dfa_data(results)

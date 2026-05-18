@@ -15,7 +15,7 @@ if os.path.exists('./cwd.txt'):
         PROJECTROOT = cwd.read().rstrip()
 DATA = os.path.join(PROJECTROOT, "Data")
 FIGURES = os.path.join(PROJECTROOT, "Figures")
-EAS_SHARED_MOUNT_POINT="/media/pranav/MPI_Dirs/EAS_shared/"
+EAS_SHARED_MOUNT_POINT="/home/pranav/mpi-dir/EAS_shared/"
 
 
 BABOON_BEH_SEQ_DIR ="baboon/working/data/processed/2025/acc/inactivity"
