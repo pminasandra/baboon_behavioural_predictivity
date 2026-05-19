@@ -4,34 +4,33 @@
 
 import json
 import multiprocessing as mp
-import os
-import os.path
+from pathlib import Path
 
 import pandas as pd
 
 #Directories
-PROJECTROOT = os.path.abspath("/home/pranav/Projects/Bout_Duration_Distributions/")
-EAS_SHARED_MOUNT_POINT="/media/pranav/MPI_Dirs/EAS_shared/"
-if os.path.exists('./dirs.json'):
+PROJECTROOT = Path("/home/pranav/Projects/Bout_Duration_Distributions/").absolute()
+EAS_SHARED_MOUNT_POINT = Path("/media/pranav/MPI_Dirs/EAS_shared/")
+if Path('./dirs.json').exists():
     with open("./dirs.json") as ddata:
         dirdata = json.load(ddata)
-        PROJECTROOT = dirdata["cwd"]
-        EAS_SHARED_MOUNT_POINT = dirdata["servermount"]
-DATA = os.path.join(PROJECTROOT, "Data")
-FIGURES = os.path.join(PROJECTROOT, "Figures")
+        PROJECTROOT = Path(dirdata["cwd"])
+        EAS_SHARED_MOUNT_POINT = Path(dirdata["servermount"])
+DATA = PROJECTROOT / "Data"
+FIGURES = PROJECTROOT / "Figures"
 
 
+BABOON_ACC_DIR = "baboon/working/data/processed/2025/acc/acc_v1"
 BABOON_BEH_SEQ_DIR ="baboon/working/data/processed/2025/acc/inactivity"
-BABOON_BEH_SEQ_DIR = os.path.join(*BABOON_BEH_SEQ_DIR.split('/'))
-BABOON_BEH_SEQ_DIR = os.path.join(EAS_SHARED_MOUNT_POINT, BABOON_BEH_SEQ_DIR)
+BABOON_ACC_DIR = EAS_SHARED_MOUNT_POINT / BABOON_ACC_DIR
+BABOON_BEH_SEQ_DIR = EAS_SHARED_MOUNT_POINT / BABOON_BEH_SEQ_DIR
 
 
 # Species
 species = ['baboon']
-os.makedirs(os.path.join(DATA, 'FitResults'), exist_ok=True)
 for spec in species:
-    os.makedirs(os.path.join(DATA, spec), exist_ok=True)
-    os.makedirs(os.path.join(DATA, 'FitResults', spec), exist_ok=True)
+    (DATA / spec).mkdir(parents=True, exist_ok=True)
+    (DATA / 'FitResults' / spec).mkdir(parents=True, exist_ok=True)
 
 # Image saving
 formats = ['png', 'svg', 'pdf']
