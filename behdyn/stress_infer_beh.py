@@ -29,8 +29,12 @@ def infer_beh_sequences(accdf, figtitle=None):
     accdf = au.filters.smudge_acc_data(accdf)
 
     accdf["vedba"] = au.feature_ext.dbas.vedba_vals(accdf)
-    df = au.feature_ext.secondwise_mean(accdf)
+    g = accdf.groupby(by="burst_timestamp").vedba.mean()
 
+    df = pd.DataFrame()
+    df["Timestamp"] = g.index
+    g = g.reset_index()
+    df["vedba_mean"] = g["vedba"]
     df["log_vedba_mean"] = np.log(df["vedba_mean"] + 1e-8)
 
     x = df["log_vedba_mean"].dropna()

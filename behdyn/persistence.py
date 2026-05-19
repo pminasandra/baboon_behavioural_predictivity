@@ -69,7 +69,7 @@ def baboon_monthwise_data_generator():
             newdatabundle["data"] = monthlydata
             newdatabundle["id"] = id_
             newdatabundle["species"] = species
-            newdatabundle["month"] = month
+            newdatabundle["timechunk"] = month
 
             yield newdatabundle
 
@@ -210,7 +210,7 @@ def _validated_paired_indices(dt_col, tdiff, indices_start, indices_end, epoch):
 
     all_tdiffs = np.array(s_ends) - np.array(s_starts)
     all_tdiffs = all_tdiffs.astype(float)
-    all_tdiffs /= 1e6#because numpy measures time in ns for some reason
+    all_tdiffs /= 1e9#because numpy measures time in ns for some reason
 # After pandas 3.0, it is now us instead of ns.
 # Fuck Pandas so much.
 # (Still a great tool though).
@@ -291,7 +291,7 @@ def bialek_corrected_mi(x, y):
     return extrap_mi, extrap_mi_err
 
 
-def MI_t(array, dt_col, T, epoch, bialek_correction=True):
+def MI_t(array, dt_col, T, epoch, bialek_correction=True, min_points=1000):
     """
     For a given time-series, quantifies the predictability of the animal's state
     at time t+T given we know the state at time t.
@@ -305,6 +305,7 @@ def MI_t(array, dt_col, T, epoch, bialek_correction=True):
     """
 
 
+    array = np.array(array)
     t_starts, t_ends = _paired_past_future_indices(array, T)
     dt_mask = _validated_paired_indices(dt_col, T, t_starts, t_ends, epoch)
 
@@ -314,7 +315,7 @@ def MI_t(array, dt_col, T, epoch, bialek_correction=True):
     array_starts = array[t_starts]
     array_ends = array[t_ends]
 
-    if len(array_starts) < 1000:
+    if len(array_starts) < min_points:
         return np.nan, np.nan
     if bialek_correction:
         mi, error = bialek_corrected_mi(array_starts, array_ends)
@@ -326,7 +327,8 @@ def MI_t(array, dt_col, T, epoch, bialek_correction=True):
         return mi, np.nan
 
 
-def mutual_information_decay(df, species, timelags, bialek_correction=True):
+def mutual_information_decay(df, species, timelags, bialek_correction=True,
+                        min_points=1000):
     """
     Implements the above analyses for a range of time-lags for an individual.
     Args:
@@ -348,7 +350,8 @@ def mutual_information_decay(df, species, timelags, bialek_correction=True):
                     dt_col,
                     tau,
                     epoch,
-                    bialek_correction=bialek_correction
+                    bialek_correction=bialek_correction,
+                    min_points=min_points
                     )
         mi_vals.append(
                 (mi, mi_err)
@@ -482,7 +485,8 @@ def complete_MI_analysis(bdg=None,
         mi_vals, mi_errs = mutual_information_decay(data,
                                 species_,
                                 timelags,
-                                bialek_correction=bialek_correction
+                                bialek_correction=bialek_correction,
+                                min_points=500
                                 )
         if np.any(np.isnan(mi_vals)):
             continue
@@ -597,16 +601,13 @@ def complete_MI_analysis(bdg=None,
         ax.autoscale(enable=True)
 
     raw_mi_vals = pd.DataFrame(raw_mi_vals)
-    raw_mi_vals.to_parquet(os.path.join(config.DATA, f"{fprefix}raw_MI_vals.parquet"))
-    pd.DataFrame(r2_results).to_csv(os.path.join(config.DATA,
-                                                    f"{fprefix}MI_decay_R2s.csv"
-                                                ),
+    print(config.DATA/f"{fprefix}raw_MI_vals.parquet")
+    raw_mi_vals.to_parquet(config.DATA/f"{fprefix}raw_MI_vals.parquet")
+    pd.DataFrame(r2_results).to_csv(config.DATA/f"{fprefix}MI_decay_R2s.csv",
                                             index=False)
-    pd.DataFrame(param_results).to_csv(os.path.join(config.DATA,
-                                                    f"{fprefix}MI_decay_params.csv"
-                                                    ),
+    pd.DataFrame(param_results).to_csv(config.DATA/f"{fprefix}MI_decay_params.csv",
                                                 index=False)
-    saved_res.to_pickle(os.path.join(config.DATA, f"{fprefix}MI_analyses_raw.pkl"))
+    saved_res.to_pickle(config.DATA/f"{fprefix}MI_analyses_raw.pkl")
 
     for species_ in plots:
         fig, ax = plots[species_]
