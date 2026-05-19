@@ -1,0 +1,8 @@
+{
+    "x_col_label" : "X",
+    "y_col_label" : "Y",
+    "z_col_label" : "Z",
+    "time_col_label" : "timestamp",
+    "ts_format": "%Y/%m/%d %H:%M:%S.%f"
+}
+
