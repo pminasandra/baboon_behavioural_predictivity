@@ -2,6 +2,7 @@
 # pminasandra.github.io
 # Dec 24, 2022
 
+import json
 import multiprocessing as mp
 import os
 import os.path
@@ -10,12 +11,14 @@ import pandas as pd
 
 #Directories
 PROJECTROOT = os.path.abspath("/home/pranav/Projects/Bout_Duration_Distributions/")
-if os.path.exists('./cwd.txt'):
-    with open("./cwd.txt") as cwd:
-        PROJECTROOT = cwd.read().rstrip()
+EAS_SHARED_MOUNT_POINT="/media/pranav/MPI_Dirs/EAS_shared/"
+if os.path.exists('./dirs.json'):
+    with open("./dirs.json") as ddata:
+        dirdata = json.load(ddata)
+        PROJECTROOT = dirdata["cwd"]
+        EAS_SHARED_MOUNT_POINT = dirdata["servermount"]
 DATA = os.path.join(PROJECTROOT, "Data")
 FIGURES = os.path.join(PROJECTROOT, "Figures")
-EAS_SHARED_MOUNT_POINT="/media/pranav/MPI_Dirs/EAS_shared/"
 
 
 BABOON_BEH_SEQ_DIR ="baboon/working/data/processed/2025/acc/inactivity"
