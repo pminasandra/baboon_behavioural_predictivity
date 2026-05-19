@@ -432,7 +432,8 @@ def complete_MI_analysis(bdg=None,
                             add_markov=True,
                             bdg_kw=dict(),
                             bialek_correction=True,
-                            timelags = _time_slots_for_sampling(1, 5000, 50)):
+                            timelags = _time_slots_for_sampling(1, 5000, 50),
+                            fprefix=None):
     """
     Runs all analyses for MI decay.
     Args:
@@ -442,6 +443,8 @@ def complete_MI_analysis(bdg=None,
         bialek_correction (bool): whether to make Nemenman-Bialek correction for given
         MI estimates.
     """
+
+    fprefix = "" if fprefix is None else f"{fprefix}_"
 
 # Load data and inititalise
     print("Mutual Information decay analysis initiated.")
@@ -454,9 +457,9 @@ def complete_MI_analysis(bdg=None,
     plots = {}
     r2_results = []
     param_results = []
-    raw_mi_vals = {"id": [], "month": [], "mi_vals": []}
+    raw_mi_vals = {"id": [], "timechunk": [], "mi_vals": []}
 
-    saved_res = ["species", "id", "month", "mi_vals", "mi_errs" "mean_mi_markov",
+    saved_res = ["species", "id", "timechunk", "mi_vals", "mi_errs" "mean_mi_markov",
                     "ulim_mi_markov", "llim_mi_markov", "tls_markov"]
     saved_res = pd.DataFrame(columns=saved_res)
 
@@ -464,7 +467,7 @@ def complete_MI_analysis(bdg=None,
         species_ = databundle["species"]
         id_ = databundle["id"]
         data = databundle["data"]
-        month = databundle["month"]
+        timechunk = databundle["timechunk"]
         table_row = {"species": species_, "id": id_}
 
 # Make empty plots
@@ -473,7 +476,7 @@ def complete_MI_analysis(bdg=None,
         fig, ax = plots[species_]
         data["datetime"] = pd.to_datetime(data["datetime"])
 
-        print(f"MI decay analysis working on {species_} {id_} for {month}.")
+        print(f"MI decay analysis working on {species_} {id_} for {timechunk}.")
 
 # Compute time-lagged MI values
         mi_vals, mi_errs = mutual_information_decay(data,
@@ -485,10 +488,10 @@ def complete_MI_analysis(bdg=None,
             continue
         table_row["mi_vals"] = [mi_vals]
         table_row["mi_errs"] = [mi_errs]
-        table_row["month"] = [month]
+        table_row["timechunk"] = [timechunk]
 
         raw_mi_vals["id"].append(id_)
-        raw_mi_vals["month"].append(month)
+        raw_mi_vals["timechunk"].append(timechunk)
         raw_mi_vals["mi_vals"].append(mi_vals)
 
 # Make plots of actual MI decay
@@ -537,11 +540,6 @@ def complete_MI_analysis(bdg=None,
             table_row["llim_mi_markov"] = [llim_mi_markov]
             table_row["tls_markov"] = [tls_markov_plot]
 
-            if saved_res.empty:
-                saved_res = pd.DataFrame(table_row)
-            else:
-                saved_res = pd.concat((saved_res, pd.DataFrame(table_row)))
-
             ax.autoscale(enable=False)
             ax.plot(tls_markov_plot, mean_mi_markov,
                         color=config.markovised_plot_color,
@@ -550,6 +548,11 @@ def complete_MI_analysis(bdg=None,
                         color=config.markovised_plot_color,
                         alpha=0.09)
             ax.autoscale(enable=True)
+        if saved_res.empty:
+            saved_res = pd.DataFrame(table_row)
+        else:
+            saved_res = pd.concat((saved_res, pd.DataFrame(table_row)))
+
 
 
 # Fit candidate functions
@@ -566,6 +569,7 @@ def complete_MI_analysis(bdg=None,
         r2s_raw = list(r2s.values())
         r2s["species"] = species_
         r2s["id"] = id_
+        r2s["timechunk"] = timechunk
         r2_results.append(r2s)
 
         pars = _save_best_dist_params((exponential_fit, powerlaw_fit,
@@ -576,6 +580,7 @@ def complete_MI_analysis(bdg=None,
 
         pars["species"] = species_
         pars["id"] = id_
+        pars["timechunk"] = timechunk
         param_results.append(pars)
 
 
@@ -592,16 +597,16 @@ def complete_MI_analysis(bdg=None,
         ax.autoscale(enable=True)
 
     raw_mi_vals = pd.DataFrame(raw_mi_vals)
-    raw_mi_vals.to_parquet(os.path.join(config.DATA, "raw_MI_vals.parquet"))
+    raw_mi_vals.to_parquet(os.path.join(config.DATA, f"{fprefix}raw_MI_vals.parquet"))
     pd.DataFrame(r2_results).to_csv(os.path.join(config.DATA,
-                                                    "MI_decay_R2s.csv"
+                                                    f"{fprefix}MI_decay_R2s.csv"
                                                 ),
                                             index=False)
     pd.DataFrame(param_results).to_csv(os.path.join(config.DATA,
-                                                    "MI_decay_params.csv"
+                                                    f"{fprefix}MI_decay_params.csv"
                                                     ),
                                                 index=False)
-    saved_res.to_pickle(os.path.join(config.DATA, "MI_analyses_raw.pkl"))
+    saved_res.to_pickle(os.path.join(config.DATA, f"{fprefix}MI_analyses_raw.pkl"))
 
     for species_ in plots:
         fig, ax = plots[species_]
@@ -611,7 +616,7 @@ def complete_MI_analysis(bdg=None,
             ax.set_xlabel("Time lag (seconds)")
 
         ax.set_ylabel("Time-lagged mutual information")
-        utilities.saveimg(plots[species_][0], f"MI_decay_{species_}")
+        utilities.saveimg(plots[species_][0], f"{fprefix}MI_decay_{species_}")
 
 def replot(pklfile):
     """
